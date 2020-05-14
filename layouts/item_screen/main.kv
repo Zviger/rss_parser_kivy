@@ -1,0 +1,52 @@
+<ItemLabel@Label>:
+    size_hint_y: None
+    text_size: self.width, None
+    height: self.texture_size[1]
+    halign: 'center'
+    valign: 'middle'
+    padding: [10, 10]
+    spacing: 30
+
+ScrollView:
+    title_label: title_label
+    description_label: description_label
+    back_button: back_button
+    author_label: author_label
+    time_label: time_label
+    url_label: url_label
+    image: image
+    BoxLayout:
+        orientation: 'vertical'
+
+        ItemLabel:
+            id: title_label
+            font_size: '30sp'
+        ItemLabel:
+            id: author_label
+            halign: 'left'
+        ItemLabel:
+            id: time_label
+            halign: 'left'
+        BoxLayout:
+            id: image
+            orientation: 'vertical'
+        ItemLabel:
+            id: description_label
+        TextInput:
+            id: url_label
+            size_hint_y: None
+            text_size: self.width, None
+            size_hint_y: 0.2
+            halign: 'center'
+            valign: 'middle'
+            padding: [10, 10]
+            spacing: 30
+        BoxLayout:
+            size_hint_y: 0.1
+            margin: [100, 0, 100, 20]
+            Button:
+                id: back_button
+
+                text: 'Back'
+                on_release:
+                    root.parent.on_back()

@@ -1,6 +1,28 @@
-ScrollView:
+BoxLayout:
+    orientation: 'vertical'
     grid_layout: grid_layout
-    GridLayout:
-        id: grid_layout
-        size_hint_y: None
-        cols: 1
+    text_input: text_input
+    search_button: search_button
+    BoxLayout:
+        size_hint_y: 0.1
+        TextInput:
+            id: text_input
+            multiline: False
+            halign: 'center'
+            valign: 'middle'
+        Button:
+            id: search_button
+            size_hint_x: 0.2
+            text: 'Search'
+            margin: 5
+            on_release:
+                root.parent.load_content()
+    ScrollView:
+        size_hint_y: 1
+        GridLayout:
+            id: grid_layout
+            padding: 20
+            spacing: 30
+            size_hint_y: None
+            minimum_height: self.height
+            cols: 2

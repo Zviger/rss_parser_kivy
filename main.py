@@ -1,174 +1,93 @@
+import time
+
 from kivy.app import runTouchApp
-from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.uix.behaviors import ButtonBehavior
-from kivy.uix.gridlayout import GridLayout
 from kivy.uix.button import Button
 from kivy.uix.image import AsyncImage
-from kivy.uix.label import Label
-from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen, ScreenManager
 
-from api_calls import get_catalog, get_product
-from categories_structure import CategoriesStructure
+from support_files.rss_parser import Parser
+from support_files.dtos import Item
 
 screen_manager = ScreenManager()
 
 
-class ProductScreen(Screen):
-    def __init__(self, product, category, product_items, **kwargs):
+class ItemScreen(Screen):
+    def __init__(self, item: Item, rss_url, **kwargs):
         super().__init__(**kwargs)
-        self.product = product
-        self.category = category
-        self.product_items = product_items
-        Window.bind(on_keyboard=self.prev_screen)
-
-        product_data = get_product(category, product)
-        root = Builder.load_file('layouts/product_screen/main.kv')
-        root.grid.bind(minimum_height=root.grid.setter('height'))
-        root.grid.add_widget(Label(text=product_data['full_name'], height=50, size_hint_y=None))
-        head_block = GridLayout(cols=2, size_hint_y=None, height=310, padding=(100, 20))
-        image = AsyncImage(
-            source=product_data['img_url'], allow_stretch=True, size_hint=(None, None),
-        )
-        image.size = image.image_ratio * 300, 300
-        right_head = GridLayout(rows=2)
-        price = Label(
-            text=f'{product_data["current_price"]["price_min"]} - {product_data["current_price"]["price_max"]} руб.'
-        )
-        description = Label(text=product_data['description'])
-        head_block.add_widget(image)
-        right_head.add_widget(description)
-        right_head.add_widget(price)
-        head_block.add_widget(right_head)
-        root.grid.add_widget(head_block)
-        for name, values in product_data['spec'].items():
-            root.grid.add_widget(Label(text=name, height=50, size_hint_y=None))
-            for key, value in values.items():
-                block = GridLayout(rows=1, height=50, size_hint_y=None)
-                left = Label(text=key, halign='left')
-                block.add_widget(left)
-                if isinstance(value, bool):
-                    value = 'yes' if value else 'no'
-                block.add_widget(Label(text=str(value)))
-                root.grid.add_widget(block)
-
-        self.add_widget(root)
-
-    def prev_screen(self, instance, key, *_):
-        if key == 27:
-            screen_manager.switch_to(
-                CatalogScreen(name='catalog', category=self.category, product_items=self.product_items),
-                direction='right'
-            )
-            return True
-
-
-class ProductItem(ButtonBehavior, RelativeLayout):
-    def __init__(self, product, category, product_items, **kwargs):
-        super().__init__(**kwargs)
-        self.on_press = self.get_product_page
-        self.product = product
-        self.category = category
-        self.product_items = product_items
-
-    def get_product_page(self):
-        screen_manager.switch_to(
-            ProductScreen(product=self.product, category=self.category, product_items=self.product_items),
-            direction='left'
-        )
-
-
-class CatalogScreen(Screen):
-    def __init__(self, category, product_items, **kwargs):
-        super().__init__(**kwargs)
-        Window.bind(on_keyboard=self.prev_screen)
-        self.category = category
-        root = Builder.load_file('layouts/catalog_screen/main.kv')
-        root.grid.bind(minimum_height=root.grid.setter('height'))
-        for product in product_items:
-            product_box = ProductItem(
-                category=category, product=product['key'], product_items=product_items, height=350, size_hint_y=None
-            )
-
+        self.item = item
+        self.rss_url = rss_url
+        self.main_content = main_content = Builder.load_file('layouts/item_screen/main.kv')
+        main_content.title_label.text = item.title
+        img_links = item.img_links
+        try:
+            img_links[0]
+        except IndexError:
+            img_links = [
+                "https://lh3.googleusercontent.com/proxy/IDewKjtSRFq4JXcNwZJwSKxI5m70p5T-j5ImFoVBiH5Xw109aTK491K1iP46b1uDnMpNbbNBKEZSJgbkCsbS6sf5gSK_TJMEFTtVcjGiZBtUoCpj6VYDA6Vdg1fWs8A49ZOf_mq8u7E3IeMnXEdxzSoh5nk"]
+        for img_link in img_links:
             image = AsyncImage(
-                source=product['img_url'], allow_stretch=True, size_hint=(None, None), pos_hint={'top': .8, 'right': .8}
-            )
+                source=img_link)
             image.size = image.image_ratio * 200, 200
-            product_box.add_widget(image)
+            main_content.image.add_widget(image)
+        main_content.description_label.text = item.description
+        main_content.author_label.text = f"Author: {item.author}"
+        main_content.time_label.text = f"Published time: {time.asctime(item.published_parsed)}"
+        main_content.url_label.text = f"Link: {item.link}"
+        self.add_widget(main_content)
 
-            label1 = Label(text=product['full_name'], pos_hint={'right': .75, 'top': 1})
-            product_box.add_widget(label1)
-
-            label3 = Label(text=f'от {product["current_price"]["price_min"]} р.', pos_hint={'right': .75, 'top': .9})
-            product_box.add_widget(label3)
-
-            root.grid.add_widget(product_box)
-        self.add_widget(root)
-
-    def prev_screen(self, instance, key, *_):
-        if key == 27:
-            screen_manager.switch_to(
-                SubcategoryScreen(name='subcategory', category_name=self.category),
-                direction='right'
-            )
-            return True
-
-
-class ProductButton(Button):
-    def __init__(self, category, url=None, **kwargs):
-        super().__init__(**kwargs)
-        self.size_hint_y = None
-        self.height = 120
-        self.url = url
-        self.on_press = self.get_subcategory_catalog
-        self.category = category
-
-    def get_subcategory_catalog(self):
+    def on_back(self):
         screen_manager.switch_to(
-            CatalogScreen(name='main', category=self.category, product_items=get_catalog(self.url)),
-            direction='left'
+            MainScreen(name='main', rss_url=self.rss_url)
         )
 
 
-class SubcategoryScreen(Screen):
-    def __init__(self, category_name, **kwargs):
+class ItemButton(Button):
+    def __init__(self, item, rss_url, **kwargs):
         super().__init__(**kwargs)
-        Window.bind(on_keyboard=self.prev_screen)
-        root = Builder.load_file('layouts/subcategory_screen/main.kv')
-        root.grid.bind(minimum_height=root.grid.setter('height'))
-        category = CategoriesStructure().structure[category_name]
-        for subcategory_name, subcategories in category.items():
-            root.grid.add_widget(ProductButton(text=subcategory_name, category=category_name, disabled=True))
-            for product in subcategories.values():
-                root.grid.add_widget(ProductButton(url=product['url'], category=category_name, text=product['name']))
-        self.add_widget(root)
-
-    def prev_screen(self, instance, key, *_):
-        if key == 27:
-            screen_manager.switch_to(MainScreen(name='main'), direction='right')
-            return True
-
-
-class CategoryButton(Button):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        self.item = item
+        self.rss_url = rss_url
         self.size_hint_y = None
-        self.height = 220
+        self.height = 400
         self.on_press = self.update_screen
+        self.text_size = [350, None]
+        self.halign = 'center'
+        self.valign = 'middle'
+        self.font_size = '15sp'
 
     def update_screen(self):
-        screen_manager.switch_to(SubcategoryScreen(category_name=self.text, name='subcategory'), direction='left')
+        screen_manager.switch_to(ItemScreen(item=self.item, rss_url=self.rss_url), direction='left')
 
 
 class MainScreen(Screen):
-    def __init__(self, **kwargs):
+    def __init__(self, rss_url="", **kwargs):
         super().__init__(**kwargs)
-        main_content = Builder.load_file('layouts/main_screen/main.kv')
+        self.rss_url = rss_url
+        self.main_content = main_content = Builder.load_file('layouts/main_screen/main.kv')
         main_content.grid_layout.bind(minimum_height=main_content.grid_layout.setter('height'))
-        for category, _ in CategoriesStructure().structure.items():
-            main_content.grid_layout.add_widget(CategoryButton(text=category))
+        self._load_content()
         self.add_widget(main_content)
+
+    def _load_content(self):
+        try:
+            for item in Parser.parse_feed(self.rss_url).items:
+                try:
+                    img_link = item.img_links[0]
+                except IndexError:
+                    img_link = "https://lh3.googleusercontent.com/proxy/IDewKjtSRFq4JXcNwZJwSKxI5m70p5T-j5ImFoVBiH5Xw109aTK491K1iP46b1uDnMpNbbNBKEZSJgbkCsbS6sf5gSK_TJMEFTtVcjGiZBtUoCpj6VYDA6Vdg1fWs8A49ZOf_mq8u7E3IeMnXEdxzSoh5nk"
+                image = AsyncImage(
+                    source=img_link)
+                image.size = image.image_ratio * 200, 200
+                self.main_content.grid_layout.add_widget(image)
+                self.main_content.grid_layout.add_widget(
+                    ItemButton(text=item.title, item=item, rss_url=self.rss_url))
+            self.main_content.text_input.text = self.rss_url
+        except ConnectionError:
+            self.main_content.text_input.text = "Woops, something happened with url :("
+
+    def load_content(self):
+        self.rss_url = self.main_content.text_input.text
+        self._load_content()
 
 
 if __name__ == '__main__':
